@@ -10,6 +10,13 @@ services:
       - mongo_data:/data/db
     networks:
       - app-network
+    # Thêm healthcheck cho MongoDB
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   product-api:
     build: .
@@ -19,10 +26,19 @@ services:
     environment:
       - PORT=3000
       - MONGODB_URI=mongodb://nammongodb:27017/productdb
+    # Cấu hình đợi mongodb chuyển sang trạng thái healthy rồi mới chạy
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - app-network
+    # Thêm healthcheck cho Product API (kiểm tra qua route /health)
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mongo_data:

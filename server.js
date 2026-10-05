@@ -26,3 +26,7 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server đang chạy tại cổng ${PORT}`);
 });
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK' });
+});
