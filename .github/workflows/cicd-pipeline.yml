@@ -1,0 +1,69 @@
+name: Product API CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-test-and-deploy:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # 1. Lấy mã nguồn từ GitHub về máy chủ ảo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Cài đặt Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 3. Cài đặt các gói thư viện
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Chạy test tích hợp kèm Healthcheck kiểm tra API
+      - name: Run Integration Tests & Health Check
+        env:
+          PORT: 3000
+          MONGODB_URI: mongodb://localhost:27017/product-api-prod
+        run: |
+          echo "Starting Node.js application for testing..."
+          npm start &
+          
+          # Đợi ứng dụng khởi động kết nối DB
+          sleep 5
+          
+          echo "Verifying health endpoint..."
+          curl --fail http://localhost:3000/health || exit 1
+
+      # 5. Đăng nhập vào Docker Hub sử dụng Secrets vừa lưu
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 6. Build và Push Docker Image lên Docker Hub tự động
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/product-api:latest
