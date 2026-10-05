@@ -1,0 +1,56 @@
+name: Product API Production CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  production-test:
+    runs-on: ubuntu-latest
+
+    # Khởi động dịch vụ MongoDB chính thức cho môi trường CI
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # 1. Checkout mã nguồn từ GitHub về máy chủ ảo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Thiết lập môi trường Node.js phiên bản ổn định
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 3. Cài đặt các gói thư viện phụ thuộc của ứng dụng
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Chạy kiểm tra ứng dụng với biến môi trường kết nối MongoDB thực tế trên CI
+      - name: Run API Integration Tests
+        env:
+          PORT: 3000
+          MONGODB_URI: mongodb://localhost:27017/product-api-prod
+        run: |
+          echo "Starting Node.js application in background for testing..."
+          npm start &
+          
+          # Đợi vài giây để ứng dụng khởi động và kết nối thành công với MongoDB
+          sleep 5
+          
+          echo "Verifying API health endpoint..."
+          curl --fail http://localhost:3000/health || exit 1
+          
+          echo "Production CI pipeline test completed successfully!"
